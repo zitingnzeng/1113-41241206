@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>google認證</title>
+    <!-- 引入Bootstrap 5.3 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <!-- 引入 Firebase SDK -->
+    <script type="module">
+        // Firebase SDK 版本
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
+        import { getAuth, GoogleAuthProvider, signInWithPopup } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+        import { getDatabase, ref, set, get, child, update } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-database.js";
+
+         // Firebase 配置
+         const firebaseConfig = {
+            apiKey: "AIzaSyB2tN4etdAGZ_qJZ34rz7PCy0ZFYbUz75w",
+            authDomain: "webprogramming-566e7.firebaseapp.com",
+            databaseURL: "https://webprogramming-566e7-default-rtdb.asia-southeast1.firebasedatabase.app",
+            projectId: "webprogramming-566e7",
+            storageBucket: "webprogramming-566e7.firebasestorage.app",
+            messagingSenderId: "358095967397",
+            appId: "1:358095967397:web:25d64a3d7a25b95b97694c"
+        };
+
+        // 初始化 Firebase
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const database = getDatabase(app);
+
+        // Google 登入提供者
+        const provider = new GoogleAuthProvider();
+
+        // 註冊事件
+        document.getElementById('register-btn').addEventListener('click', () => {
+            signInWithPopup(auth, provider)
+                .then((result) => {
+                    const user = result.user;
+                    const userEmail = user.email;
+                    const userName = user.displayName;
+                    const userPhoto = user.photoURL;
+
+                    // 處理電子郵件，替換 @ 和 . 使其符合 Firebase 路徑要求
+                    const sanitizedEmail = userEmail.replace(/[@.]/g, (match) => match === '@' ? '_at_' : '_dot_');
+
+                    // 用經過處理的電子郵件作為資料庫的識別碼
+                    const userRef = ref(database, 'users/' + sanitizedEmail);
+
+                    // 檢查該用戶是否已註冊
+                    get(userRef).then((snapshot) => {
+                        if (snapshot.exists()) {
+                            // 用戶已註冊，顯示提示訊息
+                            alert('已註冊，請登入');
+                        } else {
+                            // 用戶未註冊，執行註冊流程
+                            const currentTime = new Date().toLocaleString(); // 取得當前時間
+
+                            set(userRef, {
+                                email: userEmail,
+                                name: userName,
+                                photoURL: userPhoto,
+                                lastLogin: currentTime // 儲存最後登入時間
+                            }).then(() => {
+                                alert('註冊成功，資料已儲存到資料庫！');
+                            }).catch((error) => {
+                                alert('儲存資料時發生錯誤: ' + error.message);
+                            });
+                        }
+                    }).catch((error) => {
+                        alert('讀取資料時發生錯誤: ' + error.message);
+                    });
+                })
+                .catch((error) => {
+                    alert('註冊失敗: ' + error.message);
+                });
+        });
+
+        // 登入事件
+        document.getElementById('login-btn').addEventListener('click', () => {
+            signInWithPopup(auth, provider)
+                .then((result) => {
+                    const user = result.user;
+                    const userEmail = user.email;
+
+                    // 處理電子郵件，替換 @ 和 . 使其符合 Firebase 路徑要求
+                    const sanitizedEmail = userEmail.replace(/[@.]/g, (match) => match === '@' ? '_at_' : '_dot_');
+
+                    // 更新用戶的最後登入時間
+                    const currentTime = new Date().toLocaleString();
+                    const userRef = ref(database, 'users/' + sanitizedEmail);
+                    update(userRef, {
+                        lastLogin: currentTime // 更新最後登入時間
+                    }).then(() => {
+                        // 取得用戶資訊並顯示
+                        get(userRef).then((snapshot) => {
+                            if (snapshot.exists()) {
+                                const userData = snapshot.val();
+                                document.getElementById('user-info').innerHTML = `
+                                    <h3>用戶資訊</h3>
+                                    <p><strong>電子郵件:</strong> ${userData.email}</p>
+                                    <p><strong>用戶名:</strong> ${userData.name}</p>
+                                    <p><strong>最後登入時間:</strong> ${userData.lastLogin}</p>
+                                    <p><strong>用戶照片:</strong></p>
+                                    <img src="${userData.photoURL}" alt="用戶照片" style="width: 100px; height: 100px; border-radius: 50%;">
+                                `;
+                            } else {
+                                alert('未註冊');
+                                document.getElementById('user-info').innerHTML = ''; // 清空顯示的資料
+                            }
+                        }).catch((error) => {
+                            alert('讀取資料時發生錯誤: ' + error.message);
+                        });
+                    }).catch((error) => {
+                        alert('更新登入時間時發生錯誤: ' + error.message);
+                    });
+                })
+                .catch((error) => {
+                    alert('登入失敗: ' + error.message);
+                });
+        });
+
+        // 認證事件，顯示所有註冊的用戶資料
+        document.getElementById('auth-btn').addEventListener('click', () => {
+            const user = auth.currentUser;
+            if (user) {
+                const usersRef = ref(database, 'users/');
+                get(usersRef).then((snapshot) => {
+                    if (snapshot.exists()) {
+                        const usersData = snapshot.val();
+                        let usersHtml = '<h3>所有註冊用戶資料</h3>';
+                        for (const email in usersData) {
+                            const userData = usersData[email];
+                            usersHtml += `
+                                <div>
+                                    <p><strong>電子郵件:</strong> ${userData.email}</p>
+                                    <p><strong>用戶名:</strong> ${userData.name}</p>
+                                    <p><strong>最後登入時間:</strong> ${userData.lastLogin}</p>
+                                    <p><strong>用戶照片:</strong></p>
+                                    <img src="${userData.photoURL}" alt="用戶照片" style="width: 100px; height: 100px; border-radius: 50%;">
+                                </div>
+                                <hr>
+                            `;
+                        }
+                        document.getElementById('user-info').innerHTML = usersHtml;
+                    } else {
+                        alert('未找到任何用戶資料');
+                        document.getElementById('user-info').innerHTML = ''; // 清空顯示的資料
+                    }
+                }).catch((error) => {
+                    alert('讀取資料時發生錯誤: ' + error.message);
+                });
+            } else {
+                alert('未登入，無法顯示所有用戶資料');
+                document.getElementById('user-info').innerHTML = ''; // 清空顯示的資料
+            }
+        });
+    </script>
+
+    <style>
+        body {
+            background-color: #ac9bef;
+        }
+
+        .container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            text-align: center;
+        }
+
+        .card {
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0px 4px 8px rgba(0, 0, 0, 0.1);
+            background-color: white;
+            width: 300px;
+        }
+
+        .btn-custom {
+            font-size: 20px;
+            font-weight: bold;
+            border-radius: 50px;
+        }
+
+        .btn-register {
+            background-color: #d0889a;
+            color: white;
+        }
+
+        .btn-login {
+            background-color: #6db9ac;
+            color: white;
+        }
+
+        .btn-auth {
+            background-color: #d372b1;
+            color: white;
+        }
+
+        .mb-3 {
+            margin-bottom: 20px;
+        }
+
+        .d-flex {
+            justify-content: space-between;
+        }
+
+        .col-6 {
+            padding: 0 10px;
+        }
+
+        #user-info {
+            margin-top: 20px;
+            text-align: left;
+        }
+
+        #user-info img {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <div class="card">
+            <h2>google認證</h2>
+            <div class="d-flex mb-3">
+                <!-- 註冊按鈕放左邊 -->
+                <button id="register-btn" class="btn btn-register btn-custom w-45">註冊</button>
+                <!-- 登入按鈕放右邊 -->
+                <button id="login-btn" class="btn btn-login btn-custom w-45">登入</button>
+            </div>
+            <div class="mb-3">
+                <!-- 認證按鈕放在下面 -->
+                <button id="auth-btn" class="btn btn-auth btn-custom w-100">認證</button>
+            </div>
+            <div id="user-info">
+                <!-- 登入後的用戶資訊會顯示在這裡 -->
+            </div>
+        </div> 
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.11.6/dist/umd/popper.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.min.js"></script>
+</body>
+</html>
